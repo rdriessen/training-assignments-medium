@@ -18,8 +18,10 @@
 package com.netflix.simianarmy.aws.janitor;
 
 import com.amazonaws.AmazonClientException;
+import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.netflix.simianarmy.Resource;
 import com.netflix.simianarmy.Resource.CleanupState;
@@ -228,48 +230,9 @@ public class RDSJanitorResourceTracker implements JanitorResourceTracker {
     	Resource resource = null;
     	try {
     		// put additional fields
-    		Map<String, String> map = new HashMap<>();
-    		if (json != null) {
-            	TypeReference<HashMap<String,String>> typeRef = new TypeReference<HashMap<String,String>>() {};    		
-        		map = new ObjectMapper().readValue(json, typeRef);
-    		}
-    		
-    		// put everything else
-    		map.put(AWSResource.FIELD_RESOURCE_ID, rs.getString(AWSResource.FIELD_RESOURCE_ID));
-    		map.put(AWSResource.FIELD_RESOURCE_TYPE, rs.getString(AWSResource.FIELD_RESOURCE_TYPE));
-    		map.put(AWSResource.FIELD_REGION, rs.getString(AWSResource.FIELD_REGION));
-    		map.put(AWSResource.FIELD_DESCRIPTION, rs.getString(AWSResource.FIELD_DESCRIPTION));
-    		map.put(AWSResource.FIELD_STATE, rs.getString(AWSResource.FIELD_STATE));
-    		map.put(AWSResource.FIELD_TERMINATION_REASON, rs.getString(AWSResource.FIELD_TERMINATION_REASON));
-			map.put(AWSResource.FIELD_OPT_OUT_OF_JANITOR, rs.getString(AWSResource.FIELD_OPT_OUT_OF_JANITOR));
+    		Map<String, String> map = createMapResource(rs, json);
 
-			String email = rs.getString(AWSResource.FIELD_OWNER_EMAIL);
-			if (StringUtils.isBlank(email) || email.equals("0")) {
-				email = null;
-			}
-			map.put(AWSResource.FIELD_OWNER_EMAIL, email);
-
-    		String expectedTerminationTime = millisToFormattedDate(rs.getString(AWSResource.FIELD_EXPECTED_TERMINATION_TIME));
-    		String actualTerminationTime = millisToFormattedDate(rs.getString(AWSResource.FIELD_ACTUAL_TERMINATION_TIME));
-			String notificationTime = millisToFormattedDate(rs.getString(AWSResource.FIELD_NOTIFICATION_TIME));
-    		String launchTime = millisToFormattedDate(rs.getString(AWSResource.FIELD_LAUNCH_TIME));
-    		String markTime = millisToFormattedDate(rs.getString(AWSResource.FIELD_MARK_TIME));
-
-    		if (expectedTerminationTime != null) {
-    			map.put(AWSResource.FIELD_EXPECTED_TERMINATION_TIME, expectedTerminationTime);
-    		}
-    		if (actualTerminationTime != null) {
-    			map.put(AWSResource.FIELD_ACTUAL_TERMINATION_TIME, actualTerminationTime);
-    		}
-			if (notificationTime != null) {
-				map.put(AWSResource.FIELD_NOTIFICATION_TIME, notificationTime);
-			}
-    		if (launchTime != null) {
-    			map.put(AWSResource.FIELD_LAUNCH_TIME, launchTime);
-    		}
-    		if (markTime != null) {
-    			map.put(AWSResource.FIELD_MARK_TIME, markTime);
-    		}
+    		map = fillMapTimes(rs, map);
 
     		resource = AWSResource.parseFieldtoValueMap(map);
     	}catch(IOException ie) {
@@ -279,6 +242,57 @@ public class RDSJanitorResourceTracker implements JanitorResourceTracker {
     	}    	
         return resource;
     }
+
+	private Map<String, String> fillMapTimes(ResultSet rs, Map<String, String> map) throws SQLException {
+		String expectedTerminationTime = millisToFormattedDate(rs.getString(AWSResource.FIELD_EXPECTED_TERMINATION_TIME));
+		String actualTerminationTime = millisToFormattedDate(rs.getString(AWSResource.FIELD_ACTUAL_TERMINATION_TIME));
+		String notificationTime = millisToFormattedDate(rs.getString(AWSResource.FIELD_NOTIFICATION_TIME));
+		String launchTime = millisToFormattedDate(rs.getString(AWSResource.FIELD_LAUNCH_TIME));
+		String markTime = millisToFormattedDate(rs.getString(AWSResource.FIELD_MARK_TIME));
+
+		if (expectedTerminationTime != null) {
+			map.put(AWSResource.FIELD_EXPECTED_TERMINATION_TIME, expectedTerminationTime);
+		}
+		if (actualTerminationTime != null) {
+			map.put(AWSResource.FIELD_ACTUAL_TERMINATION_TIME, actualTerminationTime);
+		}
+		if (notificationTime != null) {
+			map.put(AWSResource.FIELD_NOTIFICATION_TIME, notificationTime);
+		}
+		if (launchTime != null) {
+			map.put(AWSResource.FIELD_LAUNCH_TIME, launchTime);
+		}
+		if (markTime != null) {
+			map.put(AWSResource.FIELD_MARK_TIME, markTime);
+		}
+		
+		return map;
+	}
+
+	private Map<String, String> createMapResource(ResultSet rs, String json)
+			throws IOException, JsonParseException, JsonMappingException, SQLException {
+		Map<String, String> map = new HashMap<>();
+		if (json != null) {
+			TypeReference<HashMap<String,String>> typeRef = new TypeReference<HashMap<String,String>>() {};    		
+			map = new ObjectMapper().readValue(json, typeRef);
+		}
+		
+		// put everything else
+		map.put(AWSResource.FIELD_RESOURCE_ID, rs.getString(AWSResource.FIELD_RESOURCE_ID));
+		map.put(AWSResource.FIELD_RESOURCE_TYPE, rs.getString(AWSResource.FIELD_RESOURCE_TYPE));
+		map.put(AWSResource.FIELD_REGION, rs.getString(AWSResource.FIELD_REGION));
+		map.put(AWSResource.FIELD_DESCRIPTION, rs.getString(AWSResource.FIELD_DESCRIPTION));
+		map.put(AWSResource.FIELD_STATE, rs.getString(AWSResource.FIELD_STATE));
+		map.put(AWSResource.FIELD_TERMINATION_REASON, rs.getString(AWSResource.FIELD_TERMINATION_REASON));
+		map.put(AWSResource.FIELD_OPT_OUT_OF_JANITOR, rs.getString(AWSResource.FIELD_OPT_OUT_OF_JANITOR));
+
+		String email = rs.getString(AWSResource.FIELD_OWNER_EMAIL);
+		if (StringUtils.isBlank(email) || email.equals("0")) {
+			email = null;
+		}
+		map.put(AWSResource.FIELD_OWNER_EMAIL, email);
+		return map;
+	}
 
 	private String millisToFormattedDate(String millisStr) {
 		String datetime = null;
